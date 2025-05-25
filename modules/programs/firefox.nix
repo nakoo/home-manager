@@ -2,6 +2,8 @@
 let
   inherit (lib) mkRemovedOptionModule;
 
+  cfg = config.programs.firefox;
+
   modulePath = [
     "programs"
     "firefox"
@@ -52,4 +54,11 @@ in
       modulePath ++ [ "enableIcedTea" ]
     ) "Support for this option has been removed.")
   ];
+
+  config = lib.mkIf cfg.enable {
+    mozilla.firefoxNativeMessagingHosts =
+      cfg.nativeMessagingHosts
+      # package configured native messaging hosts (entire browser actually)
+      ++ (lib.optional (cfg.finalPackage != null) cfg.finalPackage);
+  };
 }
