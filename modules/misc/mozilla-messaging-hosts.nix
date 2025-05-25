@@ -29,6 +29,13 @@ let
       "Library/Application Support/LibreWolf/NativeMessagingHosts"
     else
       ".librewolf/native-messaging-hosts";
+
+  floorpNativeMessagingHostsPath =
+    if isDarwin then
+      "Library/Application Support/Floorp/NativeMessagingHosts"
+    else
+      ".floorp/native-messaging-hosts";
+
 in
 {
   meta.maintainers = with lib.maintainers; [
@@ -64,6 +71,15 @@ in
         List of Librewolf native messaging hosts to configure.
       '';
     };
+
+    floorpNativeMessagingHosts = lib.mkOption {
+      internal = true;
+      type = with lib.types; listOf package;
+      default = [ ];
+      description = ''
+        List of Floorp native messaging hosts to configure.
+      '';
+    };
   };
 
   config =
@@ -72,63 +88,70 @@ in
         cfg.firefoxNativeMessagingHosts != [ ]
         || cfg.thunderbirdNativeMessagingHosts != [ ]
         || cfg.librewolfNativeMessagingHosts != [ ]
+        || cfg.floorpNativeMessagingHosts != [ ]
       )
       {
         home.file =
+          let
+            mkNmhLink =
+              { name, nativeMessagingHosts }:
+              let
+                packageJoin = pkgs.symlinkJoin {
+                  inherit name;
+                  paths = lib.flatten (
+                    lib.concatLists [
+                      defaultPaths
+                      nativeMessagingHosts
+                    ]
+                  );
+                };
+              in
+              lib.mkIf (nativeMessagingHosts != [ ]) {
+                source = "${packageJoin}/lib/mozilla/native-messaging-hosts";
+                recursive = true;
+                ignorelinks = true;
+              };
+          in
           if isDarwin then
-            let
-              firefoxNativeMessagingHostsJoined = pkgs.symlinkJoin {
-                name = "ff-native-messaging-hosts";
-                paths = defaultPaths ++ cfg.firefoxNativeMessagingHosts;
-              };
-              thunderbirdNativeMessagingHostsJoined = pkgs.symlinkJoin {
-                name = "th-native-messaging-hosts";
-                paths = defaultPaths ++ cfg.thunderbirdNativeMessagingHosts;
-              };
-              librewolfNativeMessagingHostsJoined = pkgs.symlinkJoin {
-                name = "lw-native-messaging-hosts";
-                paths = defaultPaths ++ cfg.librewolfNativeMessagingHosts;
-              };
-            in
             {
-              "${thunderbirdNativeMessagingHostsPath}" = lib.mkIf (cfg.thunderbirdNativeMessagingHosts != [ ]) {
-                source = "${thunderbirdNativeMessagingHostsJoined}/lib/mozilla/native-messaging-hosts";
-                recursive = true;
-                ignorelinks = true;
+              "${thunderbirdNativeMessagingHostsPath}" = mkNmhLink {
+                name = "th-native-messaging-hosts";
+                nativeMessagingHosts = cfg.thunderbirdNativeMessagingHosts;
               };
-              "${firefoxNativeMessagingHostsPath}" = lib.mkIf (cfg.firefoxNativeMessagingHosts != [ ]) {
-                source = "${firefoxNativeMessagingHostsJoined}/lib/mozilla/native-messaging-hosts";
-                recursive = true;
-                ignorelinks = true;
+
+              "${firefoxNativeMessagingHostsPath}" = mkNmhLink {
+                name = "ff-native-messaging-hosts";
+                nativeMessagingHosts = cfg.firefoxNativeMessagingHosts;
               };
-              "${librewolfNativeMessagingHostsPath}" = lib.mkIf (cfg.librewolfNativeMessagingHosts != [ ]) {
-                source = "${librewolfNativeMessagingHostsJoined}/lib/mozilla/native-messaging-hosts";
-                recursive = true;
-                ignorelinks = true;
+
+              "${librewolfNativeMessagingHostsPath}" = mkNmhLink {
+                name = "lw-native-messaging-hosts";
+                nativeMessagingHosts = cfg.librewolfNativeMessagingHosts;
+              };
+
+              "${floorpNativeMessagingHostsPath}" = mkNmhLink {
+                name = "fl-native-messaging-hosts";
+                nativeMessagingHosts = cfg.floorpNativeMessagingHosts;
               };
             }
           else
-            let
-              mozillaNativeMessagingHostsJoined = pkgs.symlinkJoin {
-                name = "mozilla-native-messaging-hosts";
-                # on Linux, the directory is shared between Firefox and Thunderbird; merge both into one
-                paths = defaultPaths ++ cfg.firefoxNativeMessagingHosts ++ cfg.thunderbirdNativeMessagingHosts;
-              };
-              librewolfNativeMessagingHostsJoined = pkgs.symlinkJoin {
-                name = "librewolf-native-messaging-hosts";
-                paths = defaultPaths ++ cfg.librewolfNativeMessagingHosts;
-              };
-            in
             {
-              "${firefoxNativeMessagingHostsPath}" = {
-                source = "${mozillaNativeMessagingHostsJoined}/lib/mozilla/native-messaging-hosts";
-                recursive = true;
-                ignorelinks = true;
+              "${firefoxNativeMessagingHostsPath}" = mkNmhLink {
+                name = "mozilla-native-messaging-hosts";
+                nativeMessagingHosts = [
+                  cfg.firefoxNativeMessagingHosts
+                  cfg.thunderbirdNativeMessagingHosts
+                ];
               };
-              "${librewolfNativeMessagingHostsPath}" = {
-                source = "${librewolfNativeMessagingHostsJoined}/lib/mozilla/native-messaging-hosts";
-                recursive = true;
-                ignorelinks = true;
+
+              "${librewolfNativeMessagingHostsPath}" = mkNmhLink {
+                name = "lw-native-messaging-hosts";
+                nativeMessagingHosts = cfg.librewolfNativeMessagingHosts;
+              };
+
+              "${floorpNativeMessagingHostsPath}" = mkNmhLink {
+                name = "fl-native-messaging-hosts";
+                nativeMessagingHosts = cfg.librewolfNativeMessagingHosts;
               };
             };
       };
